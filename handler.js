@@ -19,7 +19,10 @@ const foundVariables = Object.keys(process.env)
 const successResponse = ({ body, contentType }) => ({
   statusCode: 200,
   headers: {
-    'Content-Type': contentType
+    'Content-Type': contentType,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0'
   },
   body,
 });
@@ -48,6 +51,15 @@ const isJavaScriptContentType = (contentType) => {
   }
 };
 
+const isJsonContentType = (contentType) => {
+  switch (String(contentType).toLowerCase()) {
+    case 'application/json':
+      return true;
+    default:
+      return false;
+  }
+};
+
 const exceedsMaxLambdaResponseSize = (contentLength) => {
   const sizeInMb = FileSizeUtil(contentLength).to('MB');
   return sizeInMb >= maxResponseSizeInMb;
@@ -69,7 +81,6 @@ exports.serveIndex = (event, context, callback) => {
   s3.getObject({
     Bucket: bucketName,
     Key: filePath,
-    ResponseCacheControl: 'no-cache',
   }, (err, res) => {
     if (err) {
       return callback(null, errorResponse());
@@ -87,6 +98,7 @@ exports.serveFileOrIndex = (event, context, callback) => {
   s3.getObject({
     Bucket: bucketName,
     Key: filePath,
+    ResponseCacheControl: 'no-cache'
   }, (err, res) => {
     if (err) {
       return exports.serveIndex(event, context, callback);
@@ -95,7 +107,7 @@ exports.serveFileOrIndex = (event, context, callback) => {
     const contentLength = res.ContentLength;
     const contentType = res.ContentType;
 
-    if (exceedsMaxLambdaResponseSize(contentLength) || !isJavaScriptContentType(contentType)) {
+    if (exceedsMaxLambdaResponseSize(contentLength) || (!isJavaScriptContentType(contentType) && !isJsonContentType(contentType))) {
       // get a signed url for a getObject action
       const url = s3.getSignedUrl('getObject', {
         Bucket: bucketName,
@@ -112,4 +124,15 @@ exports.serveFileOrIndex = (event, context, callback) => {
       }));
     }
   });
+};
+
+exports.serveConfiguration = (event, context, callback) => {
+  const configuration = {};
+  foundVariables.forEach(({ name, value }) => {
+    configuration[name] = value;
+  });
+  callback(null, successResponse({
+    contentType: 'application/json',
+    body: JSON.stringify(configuration)
+  }));
 };

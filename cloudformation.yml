@@ -1,0 +1,71 @@
+Transform: 'AWS::Serverless-2016-10-31'
+Parameters:
+  BucketName:
+    Description: The SPA storage bucket
+    Type: String
+  VariablePrefix:
+    Description: The variable namespace prefix
+    Type: String
+  VersionKey:
+    Description: The version key that the spa lives under
+    Type: String
+  IndexFileName:
+    Description: The name of the file that represents the index
+    Type: String
+    Default: index.html
+  ConfigurationPath:
+    Description: The path to access all the configuration values
+    Type: String
+    Default: ".config"
+Resources:
+  IndexFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handler.serveIndex
+      Runtime: nodejs6.10
+      Environment:
+        BUCKET_NAME: !Ref BucketName
+        VARIABLE_PREFIX: !Ref VariablePrefix
+        VERSION_KEY: !Ref VersionKey
+        INDEX_FILE_NAME: !Ref IndexFileName
+      Events:
+        ApiRoot:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+  ConfigurationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handler.serveConfiguration
+      Runtime: nodejs6.10
+      Environment:
+        BUCKET_NAME: !Ref BucketName
+        VARIABLE_PREFIX: !Ref VariablePrefix
+        VERSION_KEY: !Ref VersionKey
+        INDEX_FILE_NAME: !Ref IndexFileName
+      Events:
+        ApiRoot:
+          Type: Api
+          Properties:
+            Path: !Sub "/${ConfigurationPath}"
+            Method: get
+  FileOrIndexFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: handler.serveFileOrIndex
+      Runtime: nodejs6.10
+      Environment:
+        BUCKET_NAME: !Ref BucketName
+        VARIABLE_PREFIX: !Ref VariablePrefix
+        VERSION_KEY: !Ref VersionKey
+        INDEX_FILE_NAME: !Ref IndexFileName
+      Events:
+        ApiRoot:
+          Type: Api
+          Properties:
+            Path: /{any+}
+            Method: get

@@ -33,6 +33,12 @@ functions:
       - http:
           path: /
           method: get
+  readConfiguration:
+    handler: handler.serveConfiguration
+    events:
+      - http:
+          path: /.config
+          method: get
   readFileOrIndex:
     handler: handler.serveFileOrIndex
     events:
