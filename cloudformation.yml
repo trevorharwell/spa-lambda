@@ -13,6 +13,8 @@ Parameters:
     Description: The name of the file that represents the index
     Type: String
     Default: index.html
+  Stage:
+    Default: Stage
 Resources:
   IndexFunctionRole:
     Type: AWS::IAM::Role
@@ -130,16 +132,14 @@ Resources:
           VARIABLE_PREFIX: !Ref VariablePrefix
           VERSION_KEY: !Ref VersionKey
           INDEX_FILE_NAME: !Ref IndexFileName
-      Role: !GetAtt 
-        - IndexFunctionRole
-        - Arn
+      Role: !GetAtt IndexFunctionRole.Arn
   IndexFunctionRootPermissionStage:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:invokeFunction
       Principal: apigateway.amazonaws.com
       FunctionName: !Ref IndexFunction
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/${Stage}/GET/"
   ConfigurationFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -152,16 +152,14 @@ Resources:
           VARIABLE_PREFIX: !Ref VariablePrefix
           VERSION_KEY: !Ref VersionKey
           INDEX_FILE_NAME: !Ref IndexFileName
-      Role: !GetAtt 
-        - ConfigurationFunctionRole
-        - Arn
+      Role: !GetAtt ConfigurationFunctionRole.Arn
   ConfigurationFunctionGreedyPermissionStage:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:invokeFunction
       Principal: apigateway.amazonaws.com
       FunctionName: !Ref ConfigurationFunction
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/.config"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/${Stage}/GET/.config"
   FileOrIndexFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -174,20 +172,28 @@ Resources:
           VARIABLE_PREFIX: !Ref VariablePrefix
           VERSION_KEY: !Ref VersionKey
           INDEX_FILE_NAME: !Ref IndexFileName
-      Role:
-        Fn::GetAtt:
-          - FileOrIndexFunctionRole
-          - Arn
+      Role: !GetAtt FileOrIndexFunctionRole.Arn
   FileOrIndexFunctionGreedyPermissionStage:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:invokeFunction
       Principal: apigateway.amazonaws.com
       FunctionName: !Ref FileOrIndexFunction
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/*"
-  ApiGatewayApiDeployment:
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/${Stage}/GET/*"
+  ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
       RestApiId: !Ref ApiGatewayApi
       Description: 'RestApi deployment id: 49238abb03ede949e768b79ae1267fc9f68e1f4c'
-      StageName: Stage
+      StageName: !Ref Stage
+Outputs:
+  ApiGatewayDeployment:
+    Value: !Ref ApiGatewayDeployment 
+  FileOrIndexFunction:
+    Value: !GetAtt FileOrIndexFunction.Arn
+  IndexFunction:
+    Value: !GetAtt IndexFunction.Arn
+  ConfigurationFunction:
+    Value: !GetAtt ConfigurationFunction.Arn
+  RestApi:
+    Value: !Ref ApiGatewayApi
