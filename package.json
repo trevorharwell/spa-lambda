@@ -11,7 +11,8 @@
   "license": "ISC",
   "devDependencies": {
     "aws-sdk": "2.64.0",
-    "babel-preset-es2015": "6.24.1"
+    "babel-preset-es2015": "6.24.1",
+    "serverless-offline": "3.14.1"
   },
   "dependencies": {
     "escape-string-regexp": "1.0.5",
