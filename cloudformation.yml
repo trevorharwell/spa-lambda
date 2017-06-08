@@ -1,71 +1,193 @@
-Transform: 'AWS::Serverless-2016-10-31'
 Parameters:
   BucketName:
     Description: The SPA storage bucket
     Type: String
-  VariablePrefix:
-    Description: The variable namespace prefix
-    Type: String
   VersionKey:
     Description: The version key that the spa lives under
     Type: String
+  VariablePrefix:
+    Description: The variable namespace prefix
+    Type: String
+    Default: JS_APP_
   IndexFileName:
     Description: The name of the file that represents the index
     Type: String
     Default: index.html
-  ConfigurationPath:
-    Description: The path to access all the configuration values
-    Type: String
-    Default: ".config"
 Resources:
-  IndexFunction:
-    Type: AWS::Serverless::Function
+  IndexFunctionRole:
+    Type: AWS::IAM::Role
     Properties:
-      CodeUri: .
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource: !Sub "arn:aws:s3:::${BucketName}/${VersionKey}/*"
+              - Action: logs:*
+                Effect: Allow
+                Resource: arn:aws:logs:::*
+  ConfigurationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource: !Sub "arn:aws:s3:::${BucketName}/${VersionKey}/*"
+              - Action: logs:*
+                Effect: Allow
+                Resource: arn:aws:logs:::*
+  FileOrIndexFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource: !Sub "arn:aws:s3:::${BucketName}/${VersionKey}/*"
+              - Action: logs:*
+                Effect: Allow
+                Resource: arn:aws:logs:::*
+  ApiGatewayApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Body:
+        swagger: 2
+        info:
+          title: !Ref AWS::StackName
+        paths:
+          /:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                responses: {}
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IndexFunction.Arn}/invocations"
+          /.config:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                responses: {}
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConfigurationFunction.Arn}/invocations"
+          /{any+}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                responses: {}
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileOrIndexFunction.Arn}/invocations"
+  IndexFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: .
       Handler: handler.serveIndex
       Runtime: nodejs6.10
       Environment:
-        BUCKET_NAME: !Ref BucketName
-        VARIABLE_PREFIX: !Ref VariablePrefix
-        VERSION_KEY: !Ref VersionKey
-        INDEX_FILE_NAME: !Ref IndexFileName
-      Events:
-        ApiRoot:
-          Type: Api
-          Properties:
-            Path: /
-            Method: get
-  ConfigurationFunction:
-    Type: AWS::Serverless::Function
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          VARIABLE_PREFIX: !Ref VariablePrefix
+          VERSION_KEY: !Ref VersionKey
+          INDEX_FILE_NAME: !Ref IndexFileName
+      Role: !GetAtt 
+        - IndexFunctionRole
+        - Arn
+  IndexFunctionRootPermissionStage:
+    Type: AWS::Lambda::Permission
     Properties:
-      CodeUri: .
+      Action: lambda:invokeFunction
+      Principal: apigateway.amazonaws.com
+      FunctionName: !Ref IndexFunction
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/"
+  ConfigurationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: .
       Handler: handler.serveConfiguration
       Runtime: nodejs6.10
       Environment:
-        BUCKET_NAME: !Ref BucketName
-        VARIABLE_PREFIX: !Ref VariablePrefix
-        VERSION_KEY: !Ref VersionKey
-        INDEX_FILE_NAME: !Ref IndexFileName
-      Events:
-        ApiRoot:
-          Type: Api
-          Properties:
-            Path: !Sub "/${ConfigurationPath}"
-            Method: get
-  FileOrIndexFunction:
-    Type: AWS::Serverless::Function
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          VARIABLE_PREFIX: !Ref VariablePrefix
+          VERSION_KEY: !Ref VersionKey
+          INDEX_FILE_NAME: !Ref IndexFileName
+      Role: !GetAtt 
+        - ConfigurationFunctionRole
+        - Arn
+  ConfigurationFunctionGreedyPermissionStage:
+    Type: AWS::Lambda::Permission
     Properties:
-      CodeUri: .
+      Action: lambda:invokeFunction
+      Principal: apigateway.amazonaws.com
+      FunctionName: !Ref ConfigurationFunction
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/.config"
+  FileOrIndexFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code: .
       Handler: handler.serveFileOrIndex
       Runtime: nodejs6.10
       Environment:
-        BUCKET_NAME: !Ref BucketName
-        VARIABLE_PREFIX: !Ref VariablePrefix
-        VERSION_KEY: !Ref VersionKey
-        INDEX_FILE_NAME: !Ref IndexFileName
-      Events:
-        ApiRoot:
-          Type: Api
-          Properties:
-            Path: /{any+}
-            Method: get
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+          VARIABLE_PREFIX: !Ref VariablePrefix
+          VERSION_KEY: !Ref VersionKey
+          INDEX_FILE_NAME: !Ref IndexFileName
+      Role:
+        Fn::GetAtt:
+          - FileOrIndexFunctionRole
+          - Arn
+  FileOrIndexFunctionGreedyPermissionStage:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:invokeFunction
+      Principal: apigateway.amazonaws.com
+      FunctionName: !Ref FileOrIndexFunction
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayApi}/*/GET/*"
+  ApiGatewayApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref ApiGatewayApi
+      Description: 'RestApi deployment id: 49238abb03ede949e768b79ae1267fc9f68e1f4c'
+      StageName: Stage
