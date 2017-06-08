@@ -14,6 +14,7 @@ Parameters:
     Type: String
     Default: index.html
   Stage:
+    Type: String
     Default: Stage
 Resources:
   IndexFunctionRole:
@@ -88,9 +89,6 @@ Resources:
               - Action: s3:GetObject
                 Effect: Allow
                 Resource: !Sub "arn:aws:s3:::${BucketName}/${VersionKey}/*"
-              - Action: logs:*
-                Effect: Allow
-                Resource: arn:aws:logs:::*
   ApiGatewayApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
